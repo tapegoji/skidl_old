@@ -12,7 +12,7 @@ from __future__ import (  # isort:skip
     print_function,
     unicode_literals,
 )
-
+import time
 import functools
 import re
 from builtins import dict, int, object, range, str, super
@@ -238,7 +238,8 @@ class Part(SkidlBaseObject):
         # Setup the tag for tieing the part to a footprint in a pcb editor.
         # Do this before adding the part to the circuit or an exception will occur
         # because the part can't give its hierarchical name to the circuit.
-        self.tag = tag or str(randint(0, 2**64 - 1))
+        # self.tag = tag or str(randint(0, 2**64 - 1))
+        self.tag = tag or hex(int(time.time()*1e6))[2:].upper()
 
         # Override the reference prefix if it was passed as a parameter.
         # If nothing was set, default to using "U".
@@ -1101,7 +1102,8 @@ class Part(SkidlBaseObject):
     def tag(self):
         """Delete the part tag."""
         # Part's can't have a None tag, so set a new random tag.
-        self.tag = randint(0, 2**64 - 1)
+        # self.tag = randint(0, 2**64 - 1)
+        self.tag = hex(int(time.time()*1e6))[2:].upper()
 
     @property
     def ref(self):
