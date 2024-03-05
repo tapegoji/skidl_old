@@ -28,7 +28,7 @@ from skidl.utilities import add_quotes, export_to_all
 
 
 
-def gen_netlist_comp(part):
+def gen_netlist_comp(part, hier_name, tstamps, tstamp):
     """Generate the netlist text describing a component.
 
     Args:
@@ -52,8 +52,10 @@ def gen_netlist_comp(part):
 
     # Embed the hierarchy along with a random integer into the sheetpath for each component.
     # This enables hierarchical selection in pcbnew.
-    hierarchy = add_quotes("/" + part.hierarchical_name.replace(HIER_SEP, "/"))
-    tstamps = hierarchy
+    # hierarchy = add_quotes("/" + part.hierarchical_name.replace(HIER_SEP, "/"))
+    # tstamps = hierarchy
+    hierarchy = add_quotes("/" + hier_name.replace(HIER_SEP, "/"))
+    tstamps = add_quotes("/" + tstamps.replace(HIER_SEP, "/"))
 
     fields = ""
     for fld_name, fld_value in part.fields.items():
@@ -73,7 +75,8 @@ def gen_netlist_comp(part):
         + "      (footprint {footprint})\n"
         + "{fields}"
         + "      (libsource (lib {lib_filename}) (part {part_name}))\n"
-        + "      (sheetpath (names {hierarchy}) (tstamps {tstamps})))"
+        + "      (sheetpath (names {hierarchy}) (tstamps {tstamps}))\n"
+        + "      (tstamp {tstamp}))"
     )
     txt = template.format(**locals())
     return txt
@@ -110,6 +113,20 @@ def gen_netlist(circuit):
         str: String containing netlist text.
     """
     from skidl import KICAD
+    
+    class SheetTimestamp:
+        def __init__(self):
+            self.tstamps = {}
+        
+        def set_sheet_tstamp(self, sheet):
+        # first check if the sheet has a timestamp. if not, create one
+            if sheet not in self.tstamps.keys():
+                # wating for 1ms to avoid timestamp collision
+                time.sleep(1)
+                self.tstamps[sheet] = hex(int(time.time()))[2:].upper()
+                return self.tstamps[sheet]
+            else:
+                return self.tstamps[sheet]
 
     scr_dict = scriptinfo()
     src_file = os.path.join(scr_dict["dir"], scr_dict["source"])
@@ -124,8 +141,20 @@ def gen_netlist(circuit):
     )
     netlist = template.format(**locals())
     netlist += "  (components"
+    sheet_tstamps = SheetTimestamp()
     for p in sorted(circuit.parts, key=lambda p: str(p.ref)):
-        netlist += "\n" + gen_netlist_comp(p)
+        sheet_names = p.hierarchical_name.split(".")[:-1]
+        hier_name = ""
+        tstamps = ""
+        for sheet in sheet_names:
+            hier_name = hier_name + sheet + "."
+            tstamps = tstamps + sheet_tstamps.set_sheet_tstamp(sheet)+"."
+        hier_name = hier_name [:-1]
+        tstamps =tstamps[:-1]  # remove the last dot
+        tstamp = p.hierarchical_name.split(".")[-1]
+        p.fields['hier_name'] = "/" + tstamps.replace(".", "/")
+        
+        netlist += "\n" + gen_netlist_comp(p, hier_name, tstamps, tstamp)
     netlist += ")\n"
     netlist += "  (nets"
     sorted_nets = sorted(circuit.get_nets(), key=lambda n: str(n.name))
